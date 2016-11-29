@@ -74,11 +74,12 @@ module Danger
       files.each do |file|
         file_commits = github.api.commits(repo_slug, github.branch_for_base, { path: file })
         file_commits.each do |commit|
+          detailed_commit = github.api.commit(repo_slug, commit.sha, { path: file });
           author = commit.author.login
           if authors[author]
-            authors[author] = authors[author].to_i + 1
+            authors[author] = authors[author].to_i + detailed_commit.stats.total
            else
-            authors[author] = 1
+            authors[author] = detailed_commit.stats.total
           end
         end
       end
