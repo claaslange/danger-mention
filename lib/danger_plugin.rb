@@ -41,12 +41,7 @@ module Danger
       files = select_files(file_blacklist)
       return if files.empty?
 
-      authors = {}
-      compose_urls(files).each do |url|
-        result = parse_blame(url)
-        authors.merge!(result) { |_, m, n| m + n }
-      end
-
+      authors = get_commits(files)
       reviewers = find_reviewers(authors, user_blacklist, max_reviewers)
 
       if reviewers.count > 0
@@ -72,40 +67,27 @@ module Danger
       files[0...3]
     end
 
-    def compose_urls(files)
-      host = 'https://' + env.request_source.host
+    def get_commits(files)
       repo_slug = env.ci_source.repo_slug
-      path = host + '/' + repo_slug + '/' + 'blame' + '/' + github.branch_for_base
 
-      urls = []
+      authors = {}
       files.each do |file|
-        urls << path + '/' + file
-      end
-
-      urls
-    end
-
-    def parse_blame(url)
-      regex = %r{(?:rel="(?:author|contributor)">([^<]+)</a> authored|(?:<tr class="blame-line">))}
-      source = open(url, &:read)
-      matches = source.scan(regex).to_a.flatten
-
-      current = nil
-      lines = {}
-
-      matches.each do |user|
-        if user
-          current = user
-        else
-          lines[current] = lines[current].to_i + 1
+        file_commits = github.api.commits(repo_slug, github.branch_for_base, { path: file })
+        file_commits.each do |commit|
+          author = commit.author.login
+          if authors[author]
+            authors[author] = authors[author].to_i + 1
+           else
+            authors[author] = 1
+          end
         end
       end
 
-      lines
+      authors
     end
 
     def find_reviewers(users, user_blacklist, max_reviewers)
-      user_blacklist << pr_author
+      user_blacklist << github.pr_author
       users = users.select { |k, _| !user_blacklist.include? k }
       users = users.sort_by { |_, value| value }.reverse
 
